@@ -61,4 +61,10 @@ publishing {
         	}
     }
  }
- 
+
+waterDescriptor {
+    moduleId    = 'it.water.company.spring'
+    displayName = 'Company Service Spring'
+    description = 'Spring Boot runtime variant of Company Service'
+    inheritsFrom project(':Company-service')
+}

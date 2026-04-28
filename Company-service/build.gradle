@@ -92,3 +92,17 @@ publishing {
         	}
     }
  }
+
+waterDescriptor {
+    moduleId    = 'it.water.company'
+    displayName = 'Company Service'
+    description = 'Company entity management for multi-tenant Water Framework deployments'
+
+    output {
+        standardPin 'jdbc'
+    }
+
+    input {
+        standardPin 'service-discovery'
+    }
+}

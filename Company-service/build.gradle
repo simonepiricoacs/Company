@@ -97,6 +97,9 @@ waterDescriptor {
     moduleId    = 'it.water.company'
     displayName = 'Company Service'
     description = 'Company entity management for multi-tenant Water Framework deployments'
+    componentsPackage = 'it.water.company.service'
+    repositoryPackage = 'it.water.company.repository'
+    entitiesPackage   = 'it.water.company.model'
 
     output {
         standardPin 'jdbc'

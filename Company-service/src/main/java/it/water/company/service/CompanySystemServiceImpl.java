@@ -7,6 +7,7 @@ import it.water.core.api.registry.filter.ComponentFilterBuilder;
 import it.water.core.interceptors.annotations.FrameworkComponent;
 import it.water.core.interceptors.annotations.Inject;
 import it.water.repository.service.BaseEntitySystemServiceImpl;
+import it.water.repository.entity.model.exceptions.DuplicateEntityException;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -30,4 +31,38 @@ public class CompanySystemServiceImpl extends BaseEntitySystemServiceImpl<Compan
         super(Company.class);
     }
 
+    @Override
+    public Company save(Company entity) {
+        normalizeVirtualHost(entity);
+        ensureVirtualHostAvailable(entity);
+        return super.save(entity);
+    }
+
+    @Override
+    public Company update(Company entity) {
+        normalizeVirtualHost(entity);
+        ensureVirtualHostAvailable(entity);
+        return super.update(entity);
+    }
+
+    @Override
+    public Company findByVirtualHost(String virtualHost) {
+        return repository.findByVirtualHost(VirtualHostNormalizer.normalize(virtualHost));
+    }
+
+    private void normalizeVirtualHost(Company entity) {
+        if (entity != null && entity.getVirtualHost() != null) {
+            entity.setVirtualHost(VirtualHostNormalizer.normalize(entity.getVirtualHost()));
+        }
+    }
+
+    private void ensureVirtualHostAvailable(Company entity) {
+        if (entity == null || entity.getVirtualHost() == null) {
+            return;
+        }
+        Company existing = repository.findByVirtualHost(entity.getVirtualHost());
+        if (existing != null && existing.getId() != entity.getId()) {
+            throw new DuplicateEntityException(new String[]{"virtualHost"});
+        }
+    }
 }

@@ -12,4 +12,5 @@ import it.water.company.model.Company;
  */
 public interface CompanySystemApi extends BaseEntitySystemApi<Company> {
 
+    Company findByVirtualHost(String virtualHost);
 }

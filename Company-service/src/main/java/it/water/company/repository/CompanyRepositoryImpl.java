@@ -3,6 +3,7 @@ package it.water.company.repository;
 import it.water.company.api.CompanyRepository;
 import it.water.company.model.Company;
 import it.water.core.interceptors.annotations.FrameworkComponent;
+import it.water.repository.entity.model.exceptions.NoResultException;
 import it.water.repository.jpa.WaterJpaRepositoryImpl;
 
 /**
@@ -18,4 +19,12 @@ public class CompanyRepositoryImpl extends WaterJpaRepositoryImpl<Company> imple
         super(Company.class, COMPANY_PERSISTENCE_UNIT);
     }
 
+    @Override
+    public Company findByVirtualHost(String virtualHost) {
+        try {
+            return find(getQueryBuilderInstance().field("virtualHost").equalTo(virtualHost));
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
 }

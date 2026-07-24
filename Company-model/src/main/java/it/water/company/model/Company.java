@@ -1,6 +1,7 @@
 package it.water.company.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonView;
 import it.water.core.api.entity.shared.SharedEntity;
 import it.water.core.api.permission.ProtectedEntity;
@@ -23,7 +24,13 @@ import lombok.*;
  */
 //JPA
 @Entity
-@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"vatNumber"}))
+@Table(
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"vatNumber"})
+                // virtualHost uniqueness is enforced (null-safe) in CompanySystemServiceImpl.ensureVirtualHostAvailable.
+                // A @UniqueConstraint here would route through the generic DuplicateConstraintValidator, which treats
+                // a null value as IS NULL and would flag two companies without a virtualHost as false duplicates.
+        })
 @Access(AccessType.FIELD)
 //Lombok
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -111,6 +118,17 @@ public class Company extends AbstractJpaExpandableEntity implements ProtectedEnt
     @Size(max = 255)
     @NonNull
     private String vatNumber;
+
+    /**
+     * Hostname used to resolve the active company during authentication.
+     * It is normalized to lower-case without scheme, port or trailing dot.
+     */
+    @JsonView({WaterJsonView.Extended.class})
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @NoMalitiusCode
+    @Size(max = 255)
+    @Setter
+    private String virtualHost;
 
     /**
      * Company creator

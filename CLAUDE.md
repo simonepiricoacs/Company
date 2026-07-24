@@ -1,139 +1,182 @@
 # Company Module — Business Entity (Multi-Tenant)
 
 ## Purpose
-Models the **Company** business entity in the Water Framework. A Company is a multi-tenant organizational unit that implements three key framework interfaces simultaneously: `ProtectedEntity` (access control), `OwnedResource` (ownership filtering), and `SharedEntity` (resource sharing). Serves as the reference implementation for complex entity patterns combining all three.
+Models the **Company** business entity in the Water Framework. A Company is a multi-tenant organizational unit that implements two framework interfaces: `ProtectedEntity` (access control) and `SharedEntity` (resource sharing). Reference implementation for entities that combine permission-based access with sharing across users.
 
 ## Sub-modules
 
 | Sub-module | Runtime | Key Classes |
 |---|---|---|
 | `Company-api` | All | `CompanyApi`, `CompanySystemApi`, `CompanyRestApi`, `CompanyRepository` |
-| `Company-model` | All | `Company` entity, `CompanyActions` |
-| `Company-service` | Water/OSGi | Service impl, repository, REST controller |
+| `Company-model` | All | `Company` entity |
+| `Company-service` | Water/OSGi | `CompanyServiceImpl`, `CompanySystemServiceImpl`, `CompanyRepositoryImpl`, `CompanyRestControllerImpl` |
 | `Company-service-spring` | Spring Boot | Spring MVC REST controllers, Spring Boot app config |
 
 ## Company Entity
 
 ```java
 @Entity
-@Table(name = "company")
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"vatNumber"}))
+@Access(AccessType.FIELD)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@RequiredArgsConstructor
+@Getter
+@Setter(AccessLevel.PROTECTED)
+@ToString
+@EqualsAndHashCode(callSuper = true, of = {"vatNumber"})
 @AccessControl(
-    availableActions = {CrudActions.class},
+    availableActions = {CrudActions.SAVE, CrudActions.UPDATE, CrudActions.FIND, CrudActions.FIND_ALL, CrudActions.REMOVE},
     rolesPermissions = {
-        @DefaultRoleAccess(roleName = "companyManager", actions = {CrudActions.class}),
-        @DefaultRoleAccess(roleName = "companyViewer",  actions = {CrudActions.FIND, CrudActions.FIND_ALL}),
-        @DefaultRoleAccess(roleName = "companyEditor",  actions = {CrudActions.UPDATE, CrudActions.FIND, CrudActions.FIND_ALL})
+        @DefaultRoleAccess(roleName = Company.DEFAULT_MANAGER_ROLE,
+                           actions = {CrudActions.SAVE, CrudActions.UPDATE, CrudActions.FIND, CrudActions.FIND_ALL, CrudActions.REMOVE}),
+        @DefaultRoleAccess(roleName = Company.DEFAULT_VIEWER_ROLE,
+                           actions = {CrudActions.FIND, CrudActions.FIND_ALL}),
+        @DefaultRoleAccess(roleName = Company.DEFAULT_EDITOR_ROLE,
+                           actions = {CrudActions.SAVE, CrudActions.UPDATE, CrudActions.FIND, CrudActions.FIND_ALL})
     }
 )
-public class Company extends AbstractJpaEntity
-    implements ProtectedEntity, OwnedResource, SharedEntity {
+public class Company extends AbstractJpaExpandableEntity
+    implements ProtectedEntity, SharedEntity {
 
-    @NotNull @NoMalitiusCode
+    public static final String DEFAULT_MANAGER_ROLE = "companyManager";
+    public static final String DEFAULT_VIEWER_ROLE  = "companyViewer";
+    public static final String DEFAULT_EDITOR_ROLE  = "companyEditor";
+
+    @JsonView(WaterJsonView.Extended.class)
+    @NotNullOnPersist @NotEmpty @NoMalitiusCode @Size(max = 255) @NonNull
     private String businessName;
 
-    @NotNull @NoMalitiusCode
+    @JsonView(WaterJsonView.Extended.class)
+    @NotNullOnPersist @NotEmpty @NoMalitiusCode @Size(max = 255) @NonNull
     private String invoiceAddress;
 
-    @NotNull @NoMalitiusCode
+    @JsonView(WaterJsonView.Extended.class)
+    @NotNullOnPersist @NotEmpty @NoMalitiusCode @Size(max = 255) @NonNull
     private String city;
 
-    @NotNull @NoMalitiusCode
+    @JsonView(WaterJsonView.Extended.class)
+    @NotNullOnPersist @NotEmpty @NoMalitiusCode @Size(max = 255) @NonNull
     private String postalCode;
 
-    @NotNull @NoMalitiusCode
+    @JsonView(WaterJsonView.Extended.class)
+    @NotNullOnPersist @NotEmpty @NoMalitiusCode @Size(max = 255) @NonNull
     private String nation;
 
-    @NotNull @Column(unique = true)
-    private String vatNumber;              // unique business identifier
+    @JsonView(WaterJsonView.Extended.class)
+    @NotNullOnPersist @NotEmpty @NoMalitiusCode @Size(max = 255) @NonNull
+    private String vatNumber;        // unique business identifier
 
-    @NotNull
-    private long ownerUserId;             // implements OwnedResource
+    @JsonView(WaterJsonView.Extended.class)
+    @JsonIgnore @NonNull @Setter
+    private Long ownerUserId;        // hidden from REST responses
 }
 ```
+
+### Key entity choices
+- Extends `AbstractJpaExpandableEntity` (supports dynamic field extensions, not just `AbstractJpaEntity`)
+- Implements `ProtectedEntity` + `SharedEntity` (NOT `OwnedResource` — ownership is tracked via `ownerUserId` field but the entity does not opt into the framework's automatic ownership filtering)
+- All textual fields use the full validation stack: `@NotNullOnPersist + @NotEmpty + @NoMalitiusCode + @Size(max = 255)`
+- `vatNumber` carries `@NoMalitiusCode` like every other String field, plus a JPA `@UniqueConstraint`
+- Lombok defines a protected no-args constructor and a public required-args constructor over the `@NonNull` fields
+- Default role constants live as `public static final` on the entity itself
 
 ## Implemented Interfaces — Behavior Implications
 
 ### ProtectedEntity
-- Enables `@AllowPermissions` interceptors on all `CompanyApi` methods
+- Enables `@AllowPermissions` interceptors on all `CompanyApi` methods through `BaseEntityServiceImpl`
 - Roles (`companyManager`, `companyViewer`, `companyEditor`) defined via `@DefaultRoleAccess`
 
-### OwnedResource
-- `findAll()` on `CompanyApi` automatically filters results to companies owned by the **logged-in user**
-- `SystemApi.findAll()` returns ALL companies regardless of ownership
-- `ownerUserId` is set to `SecurityContext.getLoggedEntityId()` on `save()`
-
 ### SharedEntity
-- Enables the `SharedEntity` module to grant access to a Company instance to another user
-- A user without `ownerUserId == userId` can still access the company if a `WaterSharedEntity` record exists for them
-- The service layer checks: `ownerUserId == currentUserId OR sharedEntityService.isSharedWith(Company.class, id, currentUserId)`
+- Allows the `SharedEntity` module to grant access to a Company instance to another user via `WaterSharedEntity`
+- A user without ownership can still operate on the Company if a `WaterSharedEntity` record exists for them, subject to the permissions granted by their role
+
+> Note: `Company` does NOT implement `OwnedResource`, so `BaseEntityServiceImpl` does not automatically filter `findAll()` by `ownerUserId`. The `ownerUserId` field is informational and must be enforced manually if the module needs ownership-based filtering.
 
 ## Key Interfaces
 
-### CompanyApi (permission-checked)
+`CompanyApi` and `CompanySystemApi` are currently **inherited-only**: they expose just the standard CRUD coming from `BaseEntityApi<Company>` and `BaseEntitySystemApi<Company>` (save, update, remove, find, findAll, countAll). No domain-specific methods (e.g. `findByVatNumber`) are defined yet — add them here when needed.
+
 ```java
-Company save(Company company);                    // sets ownerUserId automatically
-Company update(Company company);
-Company find(long id);
-Company findByVatNumber(String vatNumber);
-PaginatedResult<Company> findAll(int delta, int page, Query filter); // filtered by ownership
-void remove(long id);
+public interface CompanyApi extends BaseEntityApi<Company> { }
+public interface CompanySystemApi extends BaseEntitySystemApi<Company> { }
 ```
 
-### CompanySystemApi (no permission checks)
-Same methods, unfiltered — use for internal system operations (e.g., billing, reporting services).
+### CompanyServiceImpl (Api layer)
+```java
+@FrameworkComponent
+public class CompanyServiceImpl extends BaseEntityServiceImpl<Company> implements CompanyApi {
+    @Inject @Getter @Setter private CompanySystemApi systemService;
+    @Inject @Getter @Setter private ComponentRegistry componentRegistry;
+}
+```
+Pure delegation to `BaseEntityServiceImpl`. No `save()` override, no automatic `ownerUserId` injection — the caller is responsible for setting it.
+
+### CompanySystemServiceImpl (SystemApi layer)
+```java
+@FrameworkComponent
+public class CompanySystemServiceImpl extends BaseEntitySystemServiceImpl<Company> implements CompanySystemApi {
+    @Inject @Getter @Setter private CompanyRepository repository;
+    @Inject @Setter private ComponentFilterBuilder componentFilterBuilder;
+}
+```
 
 ## REST Endpoints
 
+Defined in `CompanyRestApi` under `@Path("/companies")`. The framework prefixes the rest root context (`/water` by default) automatically.
+
 | Method | Path | Permission |
 |---|---|---|
-| `POST` | `/water/companies` | companyManager |
-| `PUT` | `/water/companies` | companyManager / companyEditor |
-| `GET` | `/water/companies/{id}` | companyViewer |
-| `GET` | `/water/companies` | companyViewer (filtered by ownership) |
-| `DELETE` | `/water/companies/{id}` | companyManager |
+| `POST`   | `/water/companies`      | companyManager / companyEditor (SAVE) |
+| `PUT`    | `/water/companies`      | companyManager / companyEditor (UPDATE) |
+| `GET`    | `/water/companies/{id}` | any role with FIND |
+| `GET`    | `/water/companies`      | any role with FIND_ALL |
+| `DELETE` | `/water/companies/{id}` | companyManager (REMOVE) |
+
+All endpoints carry `@LoggedIn`. Responses use `@JsonView(WaterJsonView.Public.class)`; entity fields tagged `Extended` are included.
 
 ## Default Roles
 
 | Role | Allowed Actions |
 |---|---|
 | `companyManager` | SAVE, UPDATE, FIND, FIND_ALL, REMOVE |
-| `companyViewer` | FIND, FIND_ALL |
-| `companyEditor` | UPDATE, FIND, FIND_ALL |
+| `companyViewer`  | FIND, FIND_ALL |
+| `companyEditor`  | SAVE, UPDATE, FIND, FIND_ALL |
 
 ## Multi-Tenant Pattern Example
 
 ```java
-// Admin creates company, sets owner
+// Caller sets the owner explicitly (no automatic injection)
 Company company = new Company("Acme Corp", "123 Main St", "NYC", "10001", "US", "US123456789");
 company.setOwnerUserId(userId);
 companySystemApi.save(company);
 
-// Grant access to another user (via SharedEntity module)
+// Grant access to another user via the SharedEntity module
 WaterSharedEntity share = new WaterSharedEntity(Company.class.getName(), company.getId(), targetUserId);
 sharedEntityApi.save(share);
 
-// Target user can now access the company
+// Target user can now access the company through CompanyApi
 TestRuntimeInitializer.getInstance().impersonate(targetUser, runtime);
-Company found = companyApi.find(company.getId()); // succeeds
+Company found = companyApi.find(company.getId());
 ```
 
 ## Dependencies
-- `it.water.repository.jpa:JpaRepository-api` — `AbstractJpaEntity`
-- `it.water.core:Core-permission` — `@AccessControl`, `CrudActions`
-- `it.water.sharedentity:SharedEntity-api` — `SharedEntity` interface, sharing service
-- `it.water.rest:Rest-persistence` — `BaseEntityRestApi`
+- `it.water.repository.jpa:JpaRepository-api` — `AbstractJpaExpandableEntity`
+- `it.water.core:Core-permission` — `@AccessControl`, `CrudActions`, `ProtectedEntity`
+- `it.water.core:Core-validation` — `@NoMalitiusCode`, `@NotNullOnPersist`
+- `it.water.core:Core-api` — `SharedEntity` interface (and the `SharedEntity` module to use it)
+- `it.water.service.rest:Rest-persistence` — `BaseEntityRestApi`
 
 ## Testing
 - Unit tests: `WaterTestExtension`
   - Test CRUD under different roles (companyManager, companyViewer, companyEditor)
-  - Test ownership filtering (user A cannot see user B's companies)
-  - Test sharing (user B can access company after `WaterSharedEntity` created)
+  - Test sharing semantics: a user can access a Company shared with them via `WaterSharedEntity`
 - REST tests: **Karate only** — never JUnit direct calls to `CompanyRestController`
-- Impersonate different users using `TestRuntimeInitializer.getInstance().impersonate(user, runtime)`
+- Switch users with `TestRuntimeInitializer.getInstance().impersonate(user, runtime)`
+- After permission tests, restore admin: `TestRuntimeUtils.impersonateAdmin(componentRegistry)`
 
 ## Code Generation Rules
-- When generating new multi-tenant entities: follow `Company` as the canonical reference implementation
-- `ownerUserId` MUST be set in the service's `save()` override, not by the client: `entity.setOwnerUserId(runtime.getSecurityContext().getLoggedEntityId())`
-- `findAll()` in `BaseEntityServiceImpl` automatically applies ownership filter when entity implements `OwnedResource`
-- `CompanyRestController` tested **exclusively via Karate**
-- `vatNumber` uses `@Column(unique = true)` without `@NoMalitiusCode` because it follows a specific business format — apply `@NoMalitiusCode` only to free-text fields
+- When generating a new sharable entity: follow `Company` as the canonical reference (`ProtectedEntity` + `SharedEntity`, role constants on the entity, full validation stack on String fields)
+- If you need automatic ownership filtering on `findAll()`, also implement `OwnedResource` — `Company` intentionally does NOT, so add it explicitly only when required
+- `ownerUserId` is `Long` (wrapper) and annotated with `@JsonIgnore` to keep it out of REST responses
+- Apply `@NoMalitiusCode` to ALL String fields exposed through REST, including identifiers like `vatNumber`
+- `CompanyRestController` is exercised **exclusively through Karate**

@@ -127,6 +127,30 @@ class CompanyApiTest implements Service {
         Assertions.assertEquals("exampleName0", entity.getBusinessName());
     }
 
+    @Test
+    @Order(30)
+    void virtualHostIsNormalizedAndResolvesCompany() {
+        Company entity = createCompany(1000);
+        entity.setVirtualHost("HTTPS://Tenant.Example.TEST:443/");
+
+        Company saved = companyApi.save(entity);
+        Company resolved = componentRegistry.findComponent(CompanySystemApi.class, null)
+                .findByVirtualHost("tenant.example.test");
+
+        Assertions.assertEquals("tenant.example.test", saved.getVirtualHost());
+        Assertions.assertNotNull(resolved);
+        Assertions.assertEquals(saved.getId(), resolved.getId());
+    }
+
+    @Test
+    @Order(31)
+    void duplicatedNormalizedVirtualHostIsRejected() {
+        Company duplicated = createCompany(1001);
+        duplicated.setVirtualHost("tenant.example.test");
+
+        Assertions.assertThrows(DuplicateEntityException.class, () -> companyApi.save(duplicated));
+    }
+
     /**
      * Testing update logic, basic test
      */

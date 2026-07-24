@@ -10,4 +10,5 @@ import it.water.core.api.repository.BaseRepository;
  */
 public interface CompanyRepository extends BaseRepository<Company> {
 
+    Company findByVirtualHost(String virtualHost);
 }

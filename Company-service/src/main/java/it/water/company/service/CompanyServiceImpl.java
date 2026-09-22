@@ -3,10 +3,12 @@ package it.water.company.service;
 import it.water.company.api.CompanyApi;
 import it.water.company.api.CompanySystemApi;
 import it.water.company.model.Company;
+import it.water.core.api.permission.SecurityContext;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.interceptors.annotations.FrameworkComponent;
 import it.water.core.interceptors.annotations.Inject;
 import it.water.repository.service.BaseEntityServiceImpl;
+import it.water.core.permission.exceptions.UnauthorizedException;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -31,6 +33,21 @@ public class CompanyServiceImpl extends BaseEntityServiceImpl<Company> implement
     public CompanyServiceImpl() {
 
         super(Company.class);
+    }
+
+    @Override
+    public Company findCurrent() {
+        SecurityContext securityContext = getRuntime() == null ? null : getRuntime().getSecurityContext();
+        Long companyId = securityContext == null ? null : securityContext.getActiveCompanyId();
+        if (securityContext == null || !securityContext.isLoggedIn() || companyId == null || companyId <= 0) {
+            throw new UnauthorizedException("A tenant-scoped session is required to read the current company");
+        }
+        // Deliberate SystemApi (permission-bypass) read: standard find(id) is permission-gated,
+        // so a plain tenant user without a Company FIND grant would receive HTTP 401 for their own company.
+        // This is safe because the id is taken from the token's activeCompanyId (not the caller),
+        // so a user can only ever read the company its session is scoped to. Do NOT switch this
+        // to the permission-checked find(id): it would re-introduce the gate and break the endpoint.
+        return systemService.find(companyId);
     }
 
 }

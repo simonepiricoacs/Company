@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonView;
 import it.water.core.api.entity.shared.SharedEntity;
+import it.water.core.api.model.WaterCompany;
 import it.water.core.api.permission.ProtectedEntity;
 import it.water.core.api.service.rest.WaterJsonView;
 import it.water.core.permission.action.CrudActions;
@@ -49,7 +50,7 @@ import lombok.*;
                 //Editor can do anything but remove
                 @DefaultRoleAccess(roleName = Company.DEFAULT_EDITOR_ROLE, actions = {CrudActions.SAVE, CrudActions.UPDATE, CrudActions.FIND, CrudActions.FIND_ALL})
         })
-public class Company extends AbstractJpaExpandableEntity implements ProtectedEntity, SharedEntity {
+public class Company extends AbstractJpaExpandableEntity implements ProtectedEntity, SharedEntity, WaterCompany {
 
     public static final String DEFAULT_MANAGER_ROLE = "companyManager";
     public static final String DEFAULT_VIEWER_ROLE = "companyViewer";

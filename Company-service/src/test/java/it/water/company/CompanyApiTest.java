@@ -20,11 +20,14 @@ import it.water.core.permission.exceptions.UnauthorizedException;
 import it.water.core.testing.utils.bundle.TestRuntimeInitializer;
 import it.water.core.testing.utils.junit.WaterTestExtension;
 import it.water.core.testing.utils.runtime.TestRuntimeUtils;
+import it.water.core.testing.utils.security.TestSecurityContext;
 import it.water.repository.entity.model.exceptions.DuplicateEntityException;
 import it.water.repository.entity.model.exceptions.NoResultException;
 import lombok.Setter;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+
+import static org.mockito.Mockito.mock;
 
 /**
  * Generated with Water Generator.
@@ -149,6 +152,30 @@ class CompanyApiTest implements Service {
         duplicated.setVirtualHost("tenant.example.test");
 
         Assertions.assertThrows(DuplicateEntityException.class, () -> companyApi.save(duplicated));
+    }
+
+    @Test
+    @Order(32)
+    void currentCompanyIsResolvedFromTenantSecurityContext() {
+        Company company = companyApi.find(
+                companyRepository.getQueryBuilderInstance().createQueryFilter("businessName=exampleName1000"));
+        runtime.fillSecurityContext(TestSecurityContext.createContext(999L, "tenant-user", false, company.getId()));
+        try {
+            Assertions.assertEquals(company.getId(), companyApi.findCurrent().getId());
+        } finally {
+            TestRuntimeUtils.impersonateAdmin(componentRegistry);
+        }
+    }
+
+    @Test
+    @Order(33)
+    void currentCompanyRejectsUnscopedSession() {
+        runtime.fillSecurityContext(TestSecurityContext.createContext(999L, "tenant-user", false));
+        try {
+            Assertions.assertThrows(UnauthorizedException.class, companyApi::findCurrent);
+        } finally {
+            TestRuntimeUtils.impersonateAdmin(componentRegistry);
+        }
     }
 
     /**

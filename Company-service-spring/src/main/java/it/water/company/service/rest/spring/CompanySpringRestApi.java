@@ -35,6 +35,11 @@ import org.springframework.web.bind.annotation.*;
 @FrameworkRestApi
 public interface CompanySpringRestApi extends CompanyRestApi {
     @LoggedIn
+    @GetMapping("/current")
+    @JsonView(WaterJsonView.Public.class)
+    Company findCurrent();
+
+    @LoggedIn
     @PostMapping
     @JsonView(WaterJsonView.Public.class)
     Company save(@RequestBody Company company);

@@ -17,6 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class CompanySpringRestControllerImpl extends CompanyRestControllerImpl implements CompanySpringRestApi {
 
     @Override
+    @SuppressWarnings("java:S1185")
+    public Company findCurrent() {
+        return super.findCurrent();
+    }
+
+    @Override
     @SuppressWarnings("java:S1185") //disabling sonar because spring needs to override this method
     public Company save(Company entity) {
         return super.save(entity);

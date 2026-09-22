@@ -23,6 +23,19 @@ import javax.ws.rs.core.MediaType;
 @FrameworkRestApi
 public interface CompanyRestApi extends RestApi {
 
+    @LoggedIn
+    @Path("/current")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @JsonView(WaterJsonView.Public.class)
+    @ApiOperation(value = "/current", notes = "Find the company selected in the current tenant session", httpMethod = "GET", produces = MediaType.APPLICATION_JSON)
+    @ApiResponses(value = {
+            @ApiResponse(code = 200, message = "Successful operation"),
+            @ApiResponse(code = 401, message = "A tenant-scoped session is required"),
+            @ApiResponse(code = 500, message = "Internal server error")
+    })
+    Company findCurrent();
+
    
        
     @LoggedIn

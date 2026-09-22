@@ -31,4 +31,9 @@ public class CompanyRestControllerImpl extends BaseEntityRestApi<Company> implem
         return companyApi;
     }
 
+    @Override
+    public Company findCurrent() {
+        return companyApi.findCurrent();
+    }
+
 }

@@ -11,4 +11,8 @@ import it.water.company.model.Company;
  */
 public interface CompanyApi extends BaseEntityApi<Company> {
 
+    /**
+     * Returns the company selected in the caller's tenant-scoped security context.
+     */
+    Company findCurrent();
 }
